@@ -1,0 +1,2 @@
+# go_gin_bun/handlers
+handlers\tematic.go:65:7: syntax error: unexpected newline in composite literal; possibly missing comma or }
