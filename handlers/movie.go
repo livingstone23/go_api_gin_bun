@@ -13,15 +13,15 @@ import (
 	"github.com/uptrace/bun/dialect/mysqldialect"
 )
 
-// Fuction to get all the tematics
-func Tematic_get(c *gin.Context) {
+// Fuction to get all the movies
+func Movie_get(c *gin.Context) {
 
 	c.Writer.Header().Set("LivingstoneCano", "www.livingstonecano.com")
 	db := bun.NewDB(db.Connection(), mysqldialect.New())
 
-	var tematics []model.TematicModel
+	var movies []model.MovieModel
 
-	err := db.NewSelect().Model(&tematics).OrderExpr("id desc").Scan(context.TODO())
+	err := db.NewSelect().Model(&movies).Relation("Tematic").OrderExpr("id desc").Scan(context.TODO())
 	if err != nil {
 		c.JSON(500, gin.H{
 			"message": "Error conecting to the database",
@@ -30,21 +30,21 @@ func Tematic_get(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"tematics": tematics,
+		"tematics": movies,
 	})
 }
 
-
-// Function to get a tematic by id
-func Tematic_get_by_id(c *gin.Context) {
+// Function to get a movie by id
+func Movie_get_by_id(c *gin.Context) {
 
 	c.Writer.Header().Set("LivingstoneCano", "www.livingstonecano.com")
 	db := bun.NewDB(db.Connection(), mysqldialect.New())
 
-	var tematic model.TematicModel
+	//var movie model.MovieModel
 
 	//Confirm if the register exist
-	exist, err_exist := db.NewSelect().Model(&tematic).Where("id = ?", c.Param("id")).Exists(context.TODO())
+	id := c.Param("id")
+	exist, err_exist := db.NewSelect().Model((*model.MovieModel)(nil)).Where("id = ?", id).Exists(context.TODO())
 	if err_exist != nil {
 		c.JSON(500, gin.H{
 			"message": "Error conecting to the database",
@@ -55,12 +55,14 @@ func Tematic_get_by_id(c *gin.Context) {
 	if !exist {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"status":  "error",
-			"message": "The tematic does not exist",
+			"message": "The movie does not exist",
 		})
 		return
 	}
 
-	err := db.NewSelect().Model(&tematic).Where("id = ?", c.Param("id")).Scan(context.TODO())
+	//Get the movie
+	var movieFound model.MovieModel
+	err := db.NewSelect().Model(&movieFound).Relation("Tematic").Scan(context.TODO())
 	if err != nil {
 		c.JSON(500, gin.H{
 			"status":  "error",
@@ -70,25 +72,28 @@ func Tematic_get_by_id(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"status":  "success",
-		"tematic": tematic,
+		"status": "success",
+		"movie":  movieFound,
 	})
 }
 
+// Function to create a new movie
+func Movie_post(c *gin.Context) {
 
-// Function to create a tematic
-func Tematic_post(c *gin.Context) {
 	c.Writer.Header().Set("LivingstoneCano", "www.livingstonecano.com")
 
-	var tematic dto.TematicDto
+	var movie dto.MovieDto
 
-	if err := c.ShouldBindJSON(&tematic); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if err := c.ShouldBindJSON(&movie); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status":  "error",
+			"message": "Invalid data",
+		})
 		return
 	}
 
-	//Validate is the name is empty
-	if tematic.Name == "" {
+	//validate if the name is empty
+	if movie.Name == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"status":  "error",
 			"message": "The name is required",
@@ -96,41 +101,44 @@ func Tematic_post(c *gin.Context) {
 		return
 	}
 
-	//Insertamos el nuevo registro  con BUN
 	db := bun.NewDB(db.Connection(), mysqldialect.New())
 
-	model := &model.TematicModel{Name: tematic.Name, Slug: slug.Make(tematic.Name)}
+	model := &model.MovieModel{Name: movie.Name, Slug: slug.Make(movie.Name), Description: string(movie.Description), Year: movie.Year, TematicID: movie.TematicID}
 
 	_, err := db.NewInsert().Model(model).Exec(context.TODO())
 
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"status":  "error",
-			"message": "Error conecting to the database",
+			"message": "Error creating the movie",
 		})
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{
-		"status":  "success",
-		"tematic": tematic,
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+		"movie":  movie,
 	})
 }
 
 
-// Function to update a tematic
-func Tematic_put(c *gin.Context) {
+// Function to update a movie
+func Movie_put(c *gin.Context) {
+	
 	c.Writer.Header().Set("LivingstoneCano", "www.livingstonecano.com")
 
-	var tematic dto.TematicDto
+	var movie dto.MovieDto
 
-	if err := c.ShouldBindJSON(&tematic); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if err := c.ShouldBindJSON(&movie); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status":  "error",
+			"message": "Invalid data",
+		})
 		return
 	}
 
-	//Validate is the name is empty
-	if tematic.Name == "" {
+	//validate if the name is empty
+	if movie.Name == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"status":  "error",
 			"message": "The name is required",
@@ -138,12 +146,12 @@ func Tematic_put(c *gin.Context) {
 		return
 	}
 
-	//Prepare the conectio to the database
+	//Prepare the connection to the database
 	db := bun.NewDB(db.Connection(), mysqldialect.New())
 
 	//ask if the register exist
-	var tematic_exist model.TematicModel
-	exist, err_exist := db.NewSelect().Model(&tematic_exist).Where("id = ?", c.Param("id")).Exists(context.TODO())
+	var movie_exist model.MovieModel
+	exist, err_exist := db.NewSelect().Model(&movie_exist).Where("id = ?", c.Param("id")).Exists(context.TODO())
 	if err_exist != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"message": "Error conecting to the database",
@@ -154,40 +162,40 @@ func Tematic_put(c *gin.Context) {
 	if !exist {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"status":  "error",
-			"message": "The tematic does not exist",
+			"message": "The movie does not exist",
 		})
 		return
 	}
 
 	//Update the register
-	model := &model.TematicModel{Name: tematic.Name, Slug: slug.Make(tematic.Name)}
+	model := &model.MovieModel{Name: movie.Name, Slug: slug.Make(movie.Name), Description: string(movie.Description), Year: movie.Year, TematicID: movie.TematicID}
 
 	_, err := db.NewUpdate().Model(model).Where("id = ?", c.Param("id")).Exec(context.TODO())
 
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"status":  "error",
-			"message": "Error conecting to the database",
+			"message": "Error updating the movie",
 		})
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{
-		"status":  "success",
-		"tematic": tematic,
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+		"movie":  movie,
 	})
 }
 
-
-// Function to delete a tematic
-func Tematic_delete(c *gin.Context) {
+// Function to delete a movie
+func Movie_delete(c *gin.Context) {
+	
 	c.Writer.Header().Set("LivingstoneCano", "www.livingstonecano.com")
 
 	db := bun.NewDB(db.Connection(), mysqldialect.New())
 
 	//ask if the register exist
-	var tematic_exist model.TematicModel
-	exist, err_exist := db.NewSelect().Model(&tematic_exist).Where("id = ?", c.Param("id")).Exists(context.TODO())
+	var movie_exist model.MovieModel
+	exist, err_exist := db.NewSelect().Model(&movie_exist).Where("id = ?", c.Param("id")).Exists(context.TODO())
 	if err_exist != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"message": "Error conecting to the database",
@@ -198,25 +206,23 @@ func Tematic_delete(c *gin.Context) {
 	if !exist {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"status":  "error",
-			"message": "The tematic does not exist",
+			"message": "The movie does not exist",
 		})
 		return
 	}
 
 	//Delete the register
-	_, err := db.NewDelete().Model(&tematic_exist).Where("id = ?", c.Param("id")).Exec(context.TODO())
+	_, err := db.NewDelete().Model((*model.MovieModel)(nil)).Where("id = ?", c.Param("id")).Exec(context.TODO())
 
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"status":  "error",
-			"message": "Error conecting to the database",
+			"message": "Error deleting the movie",
 		})
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{
-		"status":  "success",
-		"message": "The tematic was deleted !!!",
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
 	})
 }
-
